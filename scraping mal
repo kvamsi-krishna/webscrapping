@@ -1,0 +1,116 @@
+#importing libraries
+
+library(rvest)
+library(robotstxt)
+library(dplyr)
+
+# check if the website is allowed to scrap
+path<- paths_allowed("https://myanimelist.net/topanime.php")
+
+#assign variable for the website
+link<-"https://myanimelist.net/topanime.php"
+#read html content into a variable
+web <- read_html(link)
+
+rank<- as.numeric(web%>%html_nodes(".top-anime-rank-text")%>%html_text())
+#View(rank)
+
+
+
+
+title <- web%>%html_nodes(".anime_ranking_h3 a")%>%html_text()
+#View(title)
+
+info <- web%>%html_nodes(".mt4")%>%html_text()
+#View(info)
+
+
+score<- as.numeric(web%>%html_nodes(".on.score-label")%>%html_text())
+#View(score)
+
+topanime<-data.frame(rank,title,score,info)
+
+
+write.csv(topanime,"topanime.csv")
+
+str(topanime)
+
+library(dplyr)
+
+#removing extra elements
+#cleaning the dataset
+
+topanime$info<-gsub("eps","",topanime$info)
+topanime$info<-gsub("TV","",topanime$info)
+topanime$info<-gsub("Movie","",topanime$info)
+topanime$info<-gsub("OVA","",topanime$info)
+topanime$info<-gsub("ONA","",topanime$info)
+topanime$info<-gsub("members","",topanime$info)
+topanime$info<-gsub("\\(|\\)","",topanime$info)
+topanime$info<-gsub(",","",topanime$info)
+topanime$info<-gsub("        ","",topanime$info)
+#removing empty rows
+topanime<-topanime[-c(5,12), ]   
+#install.packages("tidyr")
+library(tidyr)
+View(topanime)
+# Split info column into 'emp', 'eps','start_month','start_year','end_month','end_year','views'
+
+topanime <- topanime %>% separate(info, c('emp', 'eps','start_month','start_year','end_month','end_year','views'))
+
+
+#removing empty columns
+topanime <- subset (topanime, select = -emp)
+#dataset$duration<-gsub("min","",dataset$duration)
+
+#changing datatype '
+topanime$eps<-as.integer(topanime$eps)
+topanime$start_year<-as.integer(topanime$start_year)
+topanime$end_year<-as.integer(topanime$end_year)
+topanime$views<-as.integer(topanime$views)
+
+str(topanime)
+
+
+ggplot(topanime, aes(x=score))+
+  geom_bar()
+ggplot(topanime, aes(x=eps))+
+  theme_light()+
+  geom_histogram(binwidth = 5)+
+  labs(y="no of animes",
+       x="episodes",
+       title = "no of episodes-no of anime realtion")
+
+
+#episode to score relation
+ggplot(topanime, aes(x=eps, y=score)) +
+  geom_point() + # Show dots
+  geom_text(
+    label=rownames(topanime), 
+    nudge_x = 0, nudge_y = 0, 
+    check_overlap = T
+    
+  )
+
+install.packages("caTools")
+set.seed(123)
+
+library(caTools)
+#datasplit
+
+split=sample.split(topanime$eps, SplitRatio = 0.8)
+View(split)
+
+#training and testing data
+train=subset(topanime,split==TRUE)
+test=subset(topanime,split==FALSE)
+
+#regression 
+regressor=lm (eps~score,data = train)
+
+#predict 
+y_pred=predict(regressor,newdata = test)
+
+#plot
+plot(test $score,test$eps,type='p',col='blue',xlab = 'score',ylab = 'episodes')
+lines(test$score,y_pred,type='o',col='red')
